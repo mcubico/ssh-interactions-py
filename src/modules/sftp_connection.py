@@ -6,7 +6,6 @@ import time
 from paramiko.sftp_client import SFTPClient
 from paramiko.transport import Transport
 from stat import S_ISDIR, S_ISREG
-from sftputil import SFTP
 
 
 class SFTPConnection:
@@ -30,20 +29,38 @@ class SFTPConnection:
         self._connection = SFTPClient.from_transport(transport)
         logging.info('SFTP connection open')
 
-    def download(self, remote_path: str, local_path: str, retry: int = 5):
+    def download(self, remote_path: str, local_path: str, retry: int = 5, iteration=1):
+        print(f'\n------ START ITERATION {iteration} ------')
+
         try:
             if not self._file_exists(remote_path):
                 raise FileNotFoundError(f"'{remote_path}' not found on '{self._hostname}'")
 
-            if not os.path.exists(local_path):
-                os.makedirs(local_path)
-
             if self._is_dir(remote_path):
-                self._download_dir(remote_path, local_path)
+                if not os.path.exists(local_path):
+                    os.makedirs(local_path)
+
+                artefact_iterator = self._connection.listdir(remote_path)
+                for item in artefact_iterator:
+                    artefact = f'{remote_path}/{item}'
+                    local_path_aux = f'{local_path}/{item}'
+
+                    print(f'Fetching: {item}')
+
+                    if self._is_dir(artefact):
+                        iteration_aux = iteration + 1
+                        self.download(artefact, local_path_aux, retry, iteration_aux)
+                        print(f'BACK TO ITERATION: {iteration}')
+                    else:
+                        self._download_file(artefact, local_path_aux, retry)
             else:
                 self._download_file(remote_path, local_path, retry)
+
+            return
         except Exception as ex:
             raise ex
+        finally:
+            print(f'------ END ITERATION {iteration} ------\n')
 
     def upload(self, local_path: str, remote_path: str):
         self._connection.put(localpath=local_path,
@@ -80,29 +97,15 @@ class SFTPConnection:
         except FileNotFoundError:
             return False
 
-    def _download_dir(self, remote_path: str, local_path: str):
-        sftp = SFTP(
-            hostname=self._hostname,
-            port=self._port,
-            username=self._username,
-            password=self._password
-        )
-
-        sftp.sync_pull(
-            remote_path=remote_path,
-            local_directory=local_path
-        )
-
     def _download_file(self, remote_path: str, local_path: str, retry: int = 5):
         if self._file_exists(remote_path) or retry == 0:
             self._connection.get(remote_path, local_path, callback=None)
-            logging.info(f'Downloaded {remote_path}')
         elif retry > 0:
             time.sleep(5)
-            logging.info(f'Try to download: {retry}')
+            print(f'Try to download: {retry}')
             retry = retry - 1
             self.download(remote_path, local_path, retry=retry)
 
     def close(self):
         self._connection.close()
-        logging.debug('SFTP connection closed')
+        print('SFTP connection closed')
