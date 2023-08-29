@@ -36,10 +36,11 @@ class SFTPConnection:
             if not self._file_exists(remote_path):
                 raise FileNotFoundError(f"'{remote_path}' not found on '{self._hostname}'")
 
-            if self._is_dir(remote_path):
-                if not os.path.exists(local_path):
-                    os.makedirs(local_path)
+            if not os.path.exists(local_path):
+                os.makedirs(local_path)
 
+            iteration_aux = iteration
+            if self.is_dir(remote_path):
                 artefact_iterator = self._connection.listdir(remote_path)
                 for item in artefact_iterator:
                     artefact = f'{remote_path}/{item}'
@@ -47,20 +48,29 @@ class SFTPConnection:
 
                     print(f'Fetching: {item}')
 
-                    if self._is_dir(artefact):
-                        iteration_aux = iteration + 1
+                    if self.is_dir(artefact):
+                        iteration_aux += 1
                         self.download(artefact, local_path_aux, retry, iteration_aux)
                         print(f'BACK TO ITERATION: {iteration}')
                     else:
                         self._download_file(artefact, local_path_aux, retry)
             else:
-                self._download_file(remote_path, local_path, retry)
+                route = remote_path.split('/')
+                filename = route[route.__len__() - 1]
+                self._download_file(remote_path, f'{local_path}/{filename}', retry)
 
             return
         except Exception as ex:
             raise ex
         finally:
             print(f'------ END ITERATION {iteration} ------\n')
+
+    def is_dir(self, path):
+        try:
+            attr = self._connection.stat(str(path))
+            return S_ISDIR(attr.st_mode)
+        except FileNotFoundError:
+            return False
 
     def upload(self, local_path: str, remote_path: str):
         self._connection.put(localpath=local_path,
@@ -82,13 +92,6 @@ class SFTPConnection:
             raise
         else:
             return True
-
-    def _is_dir(self, path):
-        try:
-            attr = self._connection.stat(str(path))
-            return S_ISDIR(attr.st_mode)
-        except FileNotFoundError:
-            return False
 
     def _is_file(self, path):
         try:

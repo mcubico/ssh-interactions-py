@@ -1,5 +1,4 @@
 paramiko>=3.3.1
 python-dotenv>=1.0.0
-sftputil>=1.1.1
 
 setuptools>=68.0.0

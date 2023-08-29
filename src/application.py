@@ -6,8 +6,6 @@ from src.modules.sftp_connection import SFTPConnection
 
 create_app()
 is_production_env = environ.get('ENV') == 'production'
-remote_path = '/home/p0431u9d2x4l/public_html/test.academiastart.bitcubico.com'
-download_path = './downloads'
 
 sftp = SFTPConnection(
     hostname=environ.get('SFTP_HOST'),
@@ -16,5 +14,16 @@ sftp = SFTPConnection(
     password=environ.get('SFTP_PASSWORD')
 )
 
-sftp.download(remote_path=remote_path, local_path=download_path)
+artifacts_to_download = environ.get('ARTIFACTS_TO_COPY').split(',')
+for artifact in artifacts_to_download:
+    remote_path = f"{environ.get('BASE_PATH_TO_COPY')}/{artifact}"
+    local_path = f"{environ.get('LOCAL_PATH_TO_DOWNLOAD_BASE')}"
+
+    if sftp.is_dir(remote_path):
+        local_path = f'{local_path}/{artifact}'
+
+    sftp.download(
+        remote_path=remote_path,
+        local_path=local_path)
+
 sftp.close()
